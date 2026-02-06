@@ -1,0 +1,1858 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>IoT Sensor Dashboard - ESP32 Monitor</title>
+    
+    <!-- Simplified imports -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4"></script>
+    <script src="https://cdn.jsdelivr.net/npm/luxon@3"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chartjs-adapter-luxon"></script>
+    
+    <!-- Google Fonts: Clean & Modern -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+    
+    <style>
+        :root {
+            --bg-primary: #0f172a;
+            --bg-secondary: #1e293b;
+            --bg-tertiary: #334155;
+            --primary: #3b82f6;
+            --primary-dark: #1d4ed8;
+            --secondary: #10b981;
+            --accent: #8b5cf6;
+            --danger: #ef4444;
+            --warning: #f59e0b;
+            --success: #10b981;
+            --text-primary: #f8fafc;
+            --text-secondary: #cbd5e1;
+            --border: #475569;
+        }
+
+        * {
+            font-family: 'Inter', sans-serif;
+        }
+
+        body {
+            background: var(--bg-primary);
+            color: var(--text-primary);
+            min-height: 100vh;
+            font-feature-settings: "ss01", "ss02", "cv01", "cv02";
+        }
+
+        .font-mono {
+            font-family: 'JetBrains Mono', monospace;
+        }
+
+        /* Smooth transitions */
+        * {
+            transition: background-color 0.2s ease, border-color 0.2s ease, transform 0.2s ease;
+        }
+
+        /* Glass effect */
+        .glass {
+            background: rgba(30, 41, 59, 0.7);
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+        }
+
+        /* Card hover effects */
+        .card {
+            background: var(--bg-secondary);
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            overflow: hidden;
+            transition: all 0.3s ease;
+        }
+
+        .card:hover {
+            border-color: var(--primary);
+            transform: translateY(-2px);
+            box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.3);
+        }
+
+        /* Status indicators */
+        .status-indicator {
+            width: 10px;
+            height: 10px;
+            border-radius: 50%;
+            display: inline-block;
+            margin-right: 6px;
+        }
+
+        .status-online { background-color: var(--success); animation: pulse 2s infinite; }
+        .status-warning { background-color: var(--warning); animation: pulse 2s infinite; }
+        .status-error { background-color: var(--danger); animation: pulse 2s infinite; }
+        .status-offline { background-color: var(--border); }
+
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.5; }
+        }
+
+        /* Progress bars */
+        .progress-bar {
+            height: 6px;
+            border-radius: 3px;
+            background: var(--bg-tertiary);
+            overflow: hidden;
+        }
+
+        .progress-fill {
+            height: 100%;
+            background: linear-gradient(90deg, var(--primary), var(--accent));
+            border-radius: 3px;
+        }
+
+        /* Button styles */
+        .btn {
+            padding: 8px 16px;
+            border-radius: 8px;
+            font-weight: 500;
+            border: 1px solid transparent;
+            cursor: pointer;
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            font-size: 14px;
+        }
+
+        .btn-primary {
+            background: var(--primary);
+            color: white;
+        }
+
+        .btn-primary:hover {
+            background: var(--primary-dark);
+        }
+
+        .btn-secondary {
+            background: transparent;
+            border-color: var(--border);
+            color: var(--text-secondary);
+        }
+
+        .btn-secondary:hover {
+            border-color: var(--primary);
+            color: var(--text-primary);
+        }
+
+        .btn-accent {
+            background: var(--accent);
+            color: white;
+            border-color: var(--accent);
+        }
+
+        .btn-accent:hover {
+            background: #7c3aed; /* Darker accent */
+        }
+
+        /* Input styles */
+        .input {
+            background: rgba(15, 23, 42, 0.5);
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            padding: 8px 12px;
+            color: var(--text-primary);
+        }
+
+        .input:focus {
+            outline: none;
+            border-color: var(--primary);
+            box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+        }
+
+        /* Chart containers */
+        .chart-container {
+            position: relative;
+            height: 280px;
+            background: var(--bg-secondary);
+            border-radius: 10px;
+            padding: 15px;
+        }
+
+        /* Badge */
+        .badge {
+            display: inline-flex;
+            align-items: center;
+            padding: 4px 10px;
+            border-radius: 20px;
+            font-size: 12px;
+            font-weight: 500;
+        }
+
+        .badge-primary {
+            background: rgba(59, 130, 246, 0.2);
+            color: var(--primary);
+        }
+
+        .badge-success {
+            background: rgba(16, 185, 129, 0.2);
+            color: var(--success);
+        }
+
+        .badge-warning {
+            background: rgba(245, 158, 11, 0.2);
+            color: var(--warning);
+        }
+
+        /* Animations */
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        .animate-fade-in {
+            animation: fadeIn 0.5s ease-out;
+        }
+
+        /* Grid layouts */
+        .grid-auto-fit {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 20px;
+        }
+
+        /* Value display */
+        .value-display {
+            font-size: 32px;
+            font-weight: 600;
+            font-family: 'JetBrains Mono', monospace;
+        }
+
+        .value-unit {
+            font-size: 14px;
+            color: var(--text-secondary);
+            margin-left: 4px;
+        }
+
+        /* Responsive adjustments */
+        @media (max-width: 768px) {
+            .grid-auto-fit {
+                grid-template-columns: 1fr;
+            }
+            
+            .value-display {
+                font-size: 24px;
+            }
+            
+            .chart-container {
+                height: 220px;
+            }
+        }
+
+        /* Loading skeleton */
+        .skeleton {
+            background: linear-gradient(90deg, var(--bg-secondary) 25%, var(--bg-tertiary) 50%, var(--bg-secondary) 75%);
+            background-size: 200% 100%;
+            animation: shimmer 1.5s infinite;
+        }
+
+        @keyframes shimmer {
+            0% { background-position: -200% 0; }
+            100% { background-position: 200% 0; }
+        }
+    </style>
+</head>
+<body class="bg-gray-950 text-gray-100">
+    <div class="min-h-screen">
+        <!-- Header -->
+        <header class="glass border-b border-gray-800">
+            <div class="container mx-auto px-4 py-4">
+                <div class="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+                    <div>
+                        <h1 class="text-2xl font-bold flex items-center gap-3">
+                            <span class="text-blue-400">📊</span>
+                            ESP32 Sensor Dashboard
+                            <span class="badge badge-primary ml-2">v2.0</span>
+                        </h1>
+                        <p class="text-gray-400 text-sm mt-1">Real-time monitoring for ESP32 sensor networks</p>
+                    </div>
+                    
+                    <div class="flex items-center gap-4">
+                        <div class="flex items-center gap-2">
+                            <span id="connection-dot" class="status-indicator status-online"></span>
+                            <span id="connection-status" class="text-sm font-medium">Connected</span>
+                        </div>
+                        <div class="text-right">
+                            <div class="text-xs text-gray-500">Last Update</div>
+                            <div id="last-update" class="text-sm font-mono">--:--:--</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </header>
+
+        <!-- Main Content -->
+        <main class="container mx-auto px-4 py-6">
+            <!-- Control Panel -->
+            <div class="card p-6 mb-6">
+                <div class="flex flex-col lg:flex-row gap-4 justify-between items-start lg:items-center">
+                    <div class="flex flex-col sm:flex-row gap-4 items-start sm:items-center">
+                        <div>
+                            <label class="block text-sm font-medium text-gray-400 mb-2">Station Selection</label>
+                            <div class="flex items-center gap-3">
+                                <select id="station-select" class="input">
+                                    <option value="">Loading stations...</option>
+                                </select>
+                            </div>
+                        </div>
+                        
+                        <div>
+                            <label class="block text-sm font-medium text-gray-400 mb-2">Time Range</label>
+                            <select id="time-range-select" class="input">
+                                <option value="0.0833">Last 5 Minutes</option>
+                                <option value="0.5">Last 30 Minutes</option>
+                                <option value="1">Last Hour</option>
+                                <option value="6">Last 6 Hours</option>
+                                <option value="24">Last 24 Hours</option>
+                            </select>
+                        </div>
+                    </div>
+                    
+                    <div class="flex flex-wrap gap-3">
+                        <button id="refresh-btn" class="btn btn-primary">
+                            <span>🔄</span>
+                            Refresh
+                        </button>
+                        <button id="pause-btn" class="btn btn-secondary">
+                            <span id="pause-icon">⏸️</span>
+                            <span id="pause-text">Pause</span>
+                        </button>
+                        <button id="export-btn" class="btn btn-secondary">
+                            <span>📥</span>
+                            Export
+                        </button>
+                        <button id="command-btn" class="btn btn-accent">
+                            <span>⚡</span>
+                            Toggle Relay
+                        </button>
+                    </div>
+                </div>
+                
+                <!-- Progress bar for data freshness -->
+                <div class="mt-4">
+                    <div class="flex justify-between text-xs text-gray-400 mb-1">
+                        <span>Data Freshness</span>
+                        <span id="data-age">--</span>
+                    </div>
+                    <div class="progress-bar">
+                        <div id="freshness-bar" class="progress-fill" style="width: 100%"></div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Status Overview -->
+            <div class="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-6">
+                <!-- System Status Card -->
+                <div class="card p-6 lg:col-span-2">
+                    <div class="flex items-center justify-between mb-4">
+                        <h2 class="text-lg font-semibold flex items-center gap-2">
+                            <span class="text-blue-400">⚡</span>
+                            System Status
+                        </h2>
+                        <div id="status-badge" class="badge badge-primary">Initializing</div>
+                    </div>
+                    
+                    <div id="status-content" class="space-y-3">
+                        <div class="flex items-center justify-between">
+                            <span class="text-gray-400">Overall Status</span>
+                            <span id="system-status" class="font-medium">Initializing...</span>
+                        </div>
+                        <div class="flex items-center justify-between">
+                            <span class="text-gray-400">Uptime</span>
+                            <span id="uptime" class="font-mono">00:00:00</span>
+                        </div>
+                        <div class="flex items-center justify-between">
+                            <span class="text-gray-400">Data Points</span>
+                            <span id="data-points" class="font-mono">0</span>
+                        </div>
+                        <div id="status-details" class="text-sm text-gray-300 bg-gray-900/50 p-3 rounded">
+                            Connecting to server...
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Quick Stats -->
+                <div class="card p-6">
+                    <h2 class="text-lg font-semibold flex items-center gap-2 mb-4">
+                        <span class="text-green-400">📈</span>
+                        Quick Stats
+                    </h2>
+                    <div class="space-y-4">
+                        <div>
+                            <div class="flex justify-between text-sm text-gray-400 mb-1">
+                                <span>Temperature</span>
+                                <span id="temp-trend">→</span>
+                            </div>
+                            <div class="value-display text-red-400">
+                                <span id="temp-value">--</span><span class="value-unit">°C</span>
+                            </div>
+                        </div>
+                        <div>
+                            <div class="flex justify-between text-sm text-gray-400 mb-1">
+                                <span>Voltage</span>
+                                <span id="voltage-trend">→</span>
+                            </div>
+                            <div class="value-display text-blue-400">
+                                <span id="voltage-quick">--</span><span class="value-unit">V</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Sensor Cards Grid -->
+            <div class="grid-auto-fit mb-6">
+                <!-- Temperature Card -->
+                <div class="card p-5">
+                    <div class="flex items-center justify-between mb-3">
+                        <div class="flex items-center gap-3">
+                            <div class="w-10 h-10 rounded-lg bg-red-900/30 flex items-center justify-center">
+                                <span class="text-red-400 text-lg">🌡️</span>
+                            </div>
+                            <div>
+                                <h3 class="font-medium">Temperature</h3>
+                                <p class="text-xs text-gray-500">DHT22 Sensor</p>
+                            </div>
+                        </div>
+                        <span id="temp-status" class="status-indicator status-online"></span>
+                    </div>
+                    <div class="value-display text-red-400">
+                        <span id="temp-value-main">--</span><span class="value-unit">°C</span>
+                    </div>
+                    <div class="mt-2 text-sm text-gray-400">
+                        <span id="temp-min">Min: --</span> • 
+                        <span id="temp-max">Max: --</span>
+                    </div>
+                </div>
+
+                <!-- Humidity Card -->
+                <div class="card p-5">
+                    <div class="flex items-center justify-between mb-3">
+                        <div class="flex items-center gap-3">
+                            <div class="w-10 h-10 rounded-lg bg-blue-900/30 flex items-center justify-center">
+                                <span class="text-blue-400 text-lg">💧</span>
+                            </div>
+                            <div>
+                                <h3 class="font-medium">Humidity</h3>
+                                <p class="text-xs text-gray-500">RH Sensor</p>
+                            </div>
+                        </div>
+                        <span id="humidity-status" class="status-indicator status-online"></span>
+                    </div>
+                    <div class="value-display text-blue-400">
+                        <span id="humidity-value">--</span><span class="value-unit">%</span>
+                    </div>
+                    <div class="mt-2 text-sm text-gray-400">
+                        <span id="humidity-min">Min: --</span> • 
+                        <span id="humidity-max">Max: --</span>
+                    </div>
+                </div>
+
+                <!-- Light Card -->
+                <div class="card p-5">
+                    <div class="flex items-center justify-between mb-3">
+                        <div class="flex items-center gap-3">
+                            <div class="w-10 h-10 rounded-lg bg-amber-900/30 flex items-center justify-center">
+                                <span class="text-amber-400 text-lg">☀️</span>
+                            </div>
+                            <div>
+                                <h3 class="font-medium">Light Level</h3>
+                                <p class="text-xs text-gray-500">LDR Sensor</p>
+                            </div>
+                        </div>
+                        <span id="light-status" class="status-indicator status-online"></span>
+                    </div>
+                    <div class="value-display text-amber-400">
+                        <span id="light-value">--</span><span class="value-unit">lux</span>
+                    </div>
+                    <div class="mt-2 text-sm text-gray-400">
+                        <span id="light-min">Min: --</span> • 
+                        <span id="light-max">Max: --</span>
+                    </div>
+                </div>
+
+                <!-- Voltage Card -->
+                <div class="card p-5">
+                    <div class="flex items-center justify-between mb-3">
+                        <div class="flex items-center gap-3">
+                            <div class="w-10 h-10 rounded-lg bg-purple-900/30 flex items-center justify-center">
+                                <span class="text-purple-400 text-lg">⚡</span>
+                            </div>
+                            <div>
+                                <h3 class="font-medium">Voltage</h3>
+                                <p class="text-xs text-gray-500">Power Supply</p>
+                            </div>
+                        </div>
+                        <span id="voltage-status" class="status-indicator status-online"></span>
+                    </div>
+                    <div class="value-display text-purple-400">
+                        <span id="voltage-value">--</span><span class="value-unit">V</span>
+                    </div>
+                    <div class="mt-2 text-sm text-gray-400">
+                        <span id="voltage-min">Min: --</span> • 
+                        <span id="voltage-max">Max: --</span>
+                    </div>
+                </div>
+
+                <!-- Current Card -->
+                <div class="card p-5">
+                    <div class="flex items-center justify-between mb-3">
+                        <div class="flex items-center gap-3">
+                            <div class="w-10 h-10 rounded-lg bg-indigo-900/30 flex items-center justify-center">
+                                <span class="text-indigo-400 text-lg">🔌</span>
+                            </div>
+                            <div>
+                                <h3 class="font-medium">Current</h3>
+                                <p class="text-xs text-gray-500">ACS712</p>
+                            </div>
+                        </div>
+                        <span id="current-status" class="status-indicator status-online"></span>
+                    </div>
+                    <div class="value-display text-indigo-400">
+                        <span id="current-value">--</span><span class="value-unit">A</span>
+                    </div>
+                    <div class="mt-2 text-sm text-gray-400">
+                        <span id="current-min">Min: --</span> • 
+                        <span id="current-max">Max: --</span>
+                    </div>
+                </div>
+
+                <!-- Thermistor Card -->
+                <div class="card p-5">
+                    <div class="flex items-center justify-between mb-3">
+                        <div class="flex items-center gap-3">
+                            <div class="w-10 h-10 rounded-lg bg-emerald-900/30 flex items-center justify-center">
+                                <span class="text-emerald-400 text-lg">🌡️</span>
+                            </div>
+                            <div>
+                                <h3 class="font-medium">Thermistor</h3>
+                                <p class="text-xs text-gray-500">NTC Sensor</p>
+                            </div>
+                        </div>
+                        <span id="thermistor-status" class="status-indicator status-online"></span>
+                    </div>
+                    <div class="value-display text-emerald-400">
+                        <span id="thermistor-value">--</span><span class="value-unit">°C</span>
+                    </div>
+                    <div class="mt-2 text-sm text-gray-400">
+                        <span id="thermistor-min">Min: --</span> • 
+                        <span id="thermistor-max">Max: --</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Charts Section -->
+            <div class="mb-6">
+                <div class="flex items-center justify-between mb-4">
+                    <h2 class="text-xl font-semibold flex items-center gap-2">
+                        <span class="text-blue-400">📊</span>
+                        Sensor Charts
+                    </h2>
+                    <div class="flex gap-2">
+                        <button id="chart-toggle" class="btn btn-secondary text-sm">
+                            <span>📈</span>
+                            Toggle Charts
+                        </button>
+                    </div>
+                </div>
+                
+                <div id="charts-grid" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                    <!-- Temperature Chart -->
+                    <div class="card p-4">
+                        <div class="flex items-center justify-between mb-3">
+                            <h3 class="font-medium">Temperature</h3>
+                            <span class="text-xs text-gray-500" id="temp-range">Last hour</span>
+                        </div>
+                        <div class="chart-container">
+                            <canvas id="tempChart"></canvas>
+                        </div>
+                    </div>
+
+                    <!-- Humidity Chart -->
+                    <div class="card p-4">
+                        <div class="flex items-center justify-between mb-3">
+                            <h3 class="font-medium">Humidity</h3>
+                            <span class="text-xs text-gray-500" id="humidity-range">Last hour</span>
+                        </div>
+                        <div class="chart-container">
+                            <canvas id="humidityChart"></canvas>
+                        </div>
+                    </div>
+
+                    <!-- Light Chart -->
+                    <div class="card p-4">
+                        <div class="flex items-center justify-between mb-3">
+                            <h3 class="font-medium">Light Level</h3>
+                            <span class="text-xs text-gray-500" id="light-range">Last hour</span>
+                        </div>
+                        <div class="chart-container">
+                            <canvas id="lightChart"></canvas>
+                        </div>
+                    </div>
+
+                    <!-- Voltage Chart -->
+                    <div class="card p-4">
+                        <div class="flex items-center justify-between mb-3">
+                            <h3 class="font-medium">Voltage</h3>
+                            <span class="text-xs text-gray-500" id="voltage-range">Last hour</span>
+                        </div>
+                        <div class="chart-container">
+                            <canvas id="voltageChart"></canvas>
+                        </div>
+                    </div>
+
+                    <!-- Current Chart -->
+                    <div class="card p-4">
+                        <div class="flex items-center justify-between mb-3">
+                            <h3 class="font-medium">Current</h3>
+                            <span class="text-xs text-gray-500" id="current-range">Last hour</span>
+                        </div>
+                        <div class="chart-container">
+                            <canvas id="currentChart"></canvas>
+                        </div>
+                    </div>
+
+                    <!-- Thermistor Chart -->
+                    <div class="card p-4">
+                        <div class="flex items-center justify-between mb-3">
+                            <h3 class="font-medium">Thermistor</h3>
+                            <span class="text-xs text-gray-500" id="thermistor-range">Last hour</span>
+                        </div>
+                        <div class="chart-container">
+                            <canvas id="thermistorChart"></canvas>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Statistics Panel -->
+            <div class="card p-6 mb-6">
+                <h2 class="text-xl font-semibold flex items-center gap-2 mb-6">
+                    <span class="text-green-400">📈</span>
+                    Data Statistics
+                </h2>
+                
+                <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
+                    <div class="text-center">
+                        <div class="text-sm text-gray-400 mb-1">Total Records</div>
+                        <div class="value-display text-blue-400" id="stat-total">0</div>
+                    </div>
+                    <div class="text-center">
+                        <div class="text-sm text-gray-400 mb-1">Avg Temperature</div>
+                        <div class="value-display text-red-400" id="stat-avg-temp">--°C</div>
+                    </div>
+                    <div class="text-center">
+                        <div class="text-sm text-gray-400 mb-1">Avg Voltage</div>
+                        <div class="value-display text-purple-400" id="stat-avg-voltage">--V</div>
+                    </div>
+                    <div class="text-center">
+                        <div class="text-sm text-gray-400 mb-1">Data Rate</div>
+                        <div class="value-display text-green-400" id="stat-rate">--/h</div>
+                    </div>
+                </div>
+            </div>
+        </main>
+
+        <!-- Footer -->
+        <footer class="glass border-t border-gray-800 py-4">
+            <div class="container mx-auto px-4">
+                <div class="flex flex-col md:flex-row justify-between items-center gap-4">
+                    <div class="text-sm text-gray-500">
+                        ESP32 IoT Dashboard • Monitoring System v2.0
+                    </div>
+                    <div class="flex items-center gap-6">
+                        <div class="text-xs text-gray-500">
+                            <span id="uptime-display">Uptime: 00:00:00</span>
+                        </div>
+                        <div class="text-xs text-gray-500">
+                            <kbd class="px-2 py-1 bg-gray-800 rounded">R</kbd> Refresh
+                            <kbd class="px-2 py-1 bg-gray-800 rounded ml-2">P</kbd> Pause
+                            <kbd class="px-2 py-1 bg-gray-800 rounded ml-2">1/2</kbd> Stations
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </footer>
+    </div>
+
+   <script>
+    // ============================================
+    // Configuration
+    // ============================================
+    const API_BASE_URL = (window.location.protocol === 'file:' || window.location.origin === 'null') 
+        ? 'http://localhost:5000' 
+        : window.location.origin;
+    const REFRESH_INTERVAL = 2000; // 2 seconds (reduced for faster updates)
+    const DATA_FRESHNESS_TIMEOUT = 300000; // 5 minutes
+    
+    // Sensor validity thresholds (match backend validation)
+    const SENSOR_THRESHOLDS = {
+        TEMP: { min: -50, max: 100 }, // DHT22 reasonable range
+        HUMIDITY: { min: 0, max: 100 }, // 0-100%
+        VOLTAGE: { min: 0, max: 20 }, // 0-20V
+        CURRENT: { min: -5, max: 20 }, // -5 to 20A
+        LDR: { min: 0, max: 4095 }, // 12-bit ADC typical
+        THERMISTOR: { min: -50, max: 150 } // NTC reasonable range
+    };
+    
+    // Status indicator colors
+    const STATUS_COLORS = {
+        GOOD: '#10b981',    // Green
+        WARNING: '#f59e0b', // Yellow
+        ERROR: '#ef4444',   // Red
+        OFFLINE: '#64748b'  // Gray
+    };
+    
+    let currentStation = null;
+    let currentTimeRange = 1;
+    let isPaused = false;
+    let refreshTimer = null;
+    let serverStartTime = Date.now();
+    let lastDataTime = null;
+    let uptimeInterval = null;
+    let lastSensorStatus = {};
+
+    // ============================================
+    // Initialize Charts
+    // ============================================
+    const chartConfig = {
+        responsive: true,
+        maintainAspectRatio: false,
+        plugins: {
+            legend: {
+                display: false
+            },
+            tooltip: {
+                mode: 'index',
+                intersect: false,
+                backgroundColor: 'rgba(15, 23, 42, 0.9)',
+                titleColor: '#f8fafc',
+                bodyColor: '#cbd5e1',
+                borderColor: '#475569',
+                borderWidth: 1,
+                cornerRadius: 6,
+                callbacks: {
+                    label: function(context) {
+                        return `${context.dataset.label}: ${context.parsed.y.toFixed(2)}`;
+                    }
+                }
+            }
+        },
+        scales: {
+            x: {
+                type: 'time',
+                time: {
+                    unit: 'minute',
+                    tooltipFormat: 'HH:mm',
+                    displayFormats: {
+                        minute: 'HH:mm',
+                        hour: 'HH:mm'
+                    }
+                },
+                grid: {
+                    color: 'rgba(71, 85, 105, 0.3)'
+                },
+                ticks: {
+                    color: '#94a3b8'
+                }
+            },
+            y: {
+                beginAtZero: true,
+                grid: {
+                    color: 'rgba(71, 85, 105, 0.2)'
+                },
+                ticks: {
+                    color: '#94a3b8'
+                }
+            }
+        },
+        interaction: {
+            intersect: false,
+            mode: 'index'
+        },
+        elements: {
+            line: {
+                tension: 0.4
+            },
+            point: {
+                radius: 3,
+                hoverRadius: 5
+            }
+        }
+    };
+
+    // Initialize all 6 charts
+    const charts = {
+        tempChart: new Chart(document.getElementById('tempChart'), {
+            type: 'line',
+            data: {
+                datasets: [{
+                    label: 'Temperature (°C)',
+                    data: [],
+                    borderColor: '#ef4444',
+                    backgroundColor: 'rgba(239, 68, 68, 0.1)',
+                    fill: true,
+                    borderWidth: 2
+                }]
+            },
+            options: {
+                ...chartConfig,
+                scales: {
+                    ...chartConfig.scales,
+                    y: {
+                        ...chartConfig.scales.y,
+                        title: {
+                            display: true,
+                            text: '°C',
+                            color: '#94a3b8'
+                        }
+                    }
+                }
+            }
+        }),
+
+        humidityChart: new Chart(document.getElementById('humidityChart'), {
+            type: 'line',
+            data: {
+                datasets: [{
+                    label: 'Humidity (%)',
+                    data: [],
+                    borderColor: '#3b82f6',
+                    backgroundColor: 'rgba(59, 130, 246, 0.1)',
+                    fill: true,
+                    borderWidth: 2
+                }]
+            },
+            options: {
+                ...chartConfig,
+                scales: {
+                    ...chartConfig.scales,
+                    y: {
+                        ...chartConfig.scales.y,
+                        title: {
+                            display: true,
+                            text: '%',
+                            color: '#94a3b8'
+                        }
+                    }
+                }
+            }
+        }),
+
+        lightChart: new Chart(document.getElementById('lightChart'), {
+            type: 'line',
+            data: {
+                datasets: [{
+                    label: 'Light Level',
+                    data: [],
+                    borderColor: '#f59e0b',
+                    backgroundColor: 'rgba(245, 158, 11, 0.1)',
+                    fill: true,
+                    borderWidth: 2
+                }]
+            },
+            options: {
+                ...chartConfig,
+                scales: {
+                    ...chartConfig.scales,
+                    y: {
+                        ...chartConfig.scales.y,
+                        title: {
+                            display: true,
+                            text: 'Lux',
+                            color: '#94a3b8'
+                        }
+                    }
+                }
+            }
+        }),
+
+        voltageChart: new Chart(document.getElementById('voltageChart'), {
+            type: 'line',
+            data: {
+                datasets: [{
+                    label: 'Voltage (V)',
+                    data: [],
+                    borderColor: '#8b5cf6',
+                    backgroundColor: 'rgba(139, 92, 246, 0.1)',
+                    fill: true,
+                    borderWidth: 2
+                }]
+            },
+            options: {
+                ...chartConfig,
+                scales: {
+                    ...chartConfig.scales,
+                    y: {
+                        ...chartConfig.scales.y,
+                        title: {
+                            display: true,
+                            text: 'Volts',
+                            color: '#94a3b8'
+                        }
+                    }
+                }
+            }
+        }),
+
+        currentChart: new Chart(document.getElementById('currentChart'), {
+            type: 'line',
+            data: {
+                datasets: [{
+                    label: 'Current (A)',
+                    data: [],
+                    borderColor: '#6366f1',
+                    backgroundColor: 'rgba(99, 102, 241, 0.1)',
+                    fill: true,
+                    borderWidth: 2
+                }]
+            },
+            options: {
+                ...chartConfig,
+                scales: {
+                    ...chartConfig.scales,
+                    y: {
+                        ...chartConfig.scales.y,
+                        title: {
+                            display: true,
+                            text: 'Amps',
+                            color: '#94a3b8'
+                        }
+                    }
+                }
+            }
+        }),
+
+        thermistorChart: new Chart(document.getElementById('thermistorChart'), {
+            type: 'line',
+            data: {
+                datasets: [{
+                    label: 'Thermistor (°C)',
+                    data: [],
+                    borderColor: '#10b981',
+                    backgroundColor: 'rgba(16, 185, 129, 0.1)',
+                    fill: true,
+                    borderWidth: 2
+                }]
+            },
+            options: {
+                ...chartConfig,
+                scales: {
+                    ...chartConfig.scales,
+                    y: {
+                        ...chartConfig.scales.y,
+                        title: {
+                            display: true,
+                            text: '°C',
+                            color: '#94a3b8'
+                        }
+                    }
+                }
+            }
+        })
+    };
+
+    // ============================================
+    // Utility Functions
+    // ============================================
+    function updateConnectionStatus(connected) {
+        const dot = document.getElementById('connection-dot');
+        const status = document.getElementById('connection-status');
+        
+        if (connected) {
+            dot.className = 'status-indicator status-online';
+            status.textContent = 'Connected';
+            status.style.color = STATUS_COLORS.GOOD;
+        } else {
+            dot.className = 'status-indicator status-error';
+            status.textContent = 'Disconnected';
+            status.style.color = STATUS_COLORS.ERROR;
+        }
+    }
+
+    function updateLastUpdate() {
+        const now = new Date();
+        const timeStr = now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+        document.getElementById('last-update').textContent = timeStr;
+        lastDataTime = now.getTime();
+        updateDataFreshness();
+    }
+
+    function formatTimeAgo(timestamp) {
+        if (!timestamp) return 'Never';
+        const seconds = Math.floor((Date.now() - timestamp) / 1000);
+        
+        if (seconds < 60) return `${seconds}s ago`;
+        if (seconds < 3600) return `${Math.floor(seconds / 60)}m ago`;
+        if (seconds < 86400) return `${Math.floor(seconds / 3600)}h ago`;
+        return `${Math.floor(seconds / 86400)}d ago`;
+    }
+
+    function updateDataFreshness() {
+        if (!lastDataTime) {
+            document.getElementById('data-age').textContent = 'No data';
+            document.getElementById('freshness-bar').style.width = '0%';
+            return;
+        }
+        
+        const age = Date.now() - lastDataTime;
+        const ageSeconds = Math.floor(age / 1000);
+        const freshness = Math.max(0, 100 - (age / DATA_FRESHNESS_TIMEOUT * 100));
+        
+        document.getElementById('data-age').textContent = `${ageSeconds}s ago`;
+        document.getElementById('freshness-bar').style.width = `${freshness}%`;
+        
+        // Update color based on freshness
+        const bar = document.getElementById('freshness-bar');
+        if (freshness > 80) {
+            bar.style.background = `linear-gradient(90deg, ${STATUS_COLORS.GOOD}, #34d399)`;
+        } else if (freshness > 50) {
+            bar.style.background = `linear-gradient(90deg, ${STATUS_COLORS.WARNING}, #fbbf24)`;
+        } else {
+            bar.style.background = `linear-gradient(90deg, ${STATUS_COLORS.ERROR}, #f87171)`;
+        }
+    }
+
+    function updateUptime() {
+        const uptime = Date.now() - serverStartTime;
+        const hours = Math.floor(uptime / 3600000);
+        const minutes = Math.floor((uptime % 3600000) / 60000);
+        const seconds = Math.floor((uptime % 60000) / 1000);
+        
+        const uptimeStr = `${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
+        document.getElementById('uptime').textContent = uptimeStr;
+        document.getElementById('uptime-display').textContent = `Uptime: ${uptimeStr}`;
+    }
+
+    // ============================================
+    // Sensor Validation Functions
+    // ============================================
+    function validateSensorValue(sensorType, value) {
+        if (value === null || value === undefined || isNaN(value)) {
+            return { status: 'ERROR', reason: 'No data or NaN' };
+        }
+        
+        const threshold = SENSOR_THRESHOLDS[sensorType];
+        if (!threshold) {
+            return { status: 'WARNING', reason: 'No threshold defined' };
+        }
+        
+        if (value < threshold.min || value > threshold.max) {
+            return { 
+                status: 'ERROR', 
+                reason: `Out of range (${threshold.min} - ${threshold.max})` 
+            };
+        }
+        
+        // Additional checks for specific sensors
+        switch(sensorType) {
+            case 'VOLTAGE':
+                if (value < 0.1) {
+                    return { status: 'ERROR', reason: 'Near-zero voltage (possible disconnect)' };
+                }
+                if (value > 15) {
+                    return { status: 'WARNING', reason: 'High voltage warning' };
+                }
+                break;
+                
+            case 'CURRENT':
+                if (Math.abs(value) < 0.01) {
+                    return { status: 'WARNING', reason: 'Near-zero current' };
+                }
+                if (value < 0) {
+                    return { status: 'ERROR', reason: 'Negative current' };
+                }
+                break;
+                
+            case 'TEMP':
+            case 'THERMISTOR':
+                if (value < -10 || value > 80) {
+                    return { status: 'WARNING', reason: 'Extreme temperature' };
+                }
+                break;
+                
+            case 'HUMIDITY':
+                if (value < 10 || value > 90) {
+                    return { status: 'WARNING', reason: 'Extreme humidity' };
+                }
+                break;
+        }
+        
+        return { status: 'GOOD', reason: 'Within normal operating range' };
+    }
+
+    function updateSensorStatusIndicator(sensorId, validationResult) {
+        const indicator = document.getElementById(`${sensorId}-status`);
+        if (!indicator) return;
+        
+        switch(validationResult.status) {
+            case 'GOOD':
+                indicator.style.backgroundColor = STATUS_COLORS.GOOD;
+                indicator.title = validationResult.reason;
+                break;
+            case 'WARNING':
+                indicator.style.backgroundColor = STATUS_COLORS.WARNING;
+                indicator.title = `Warning: ${validationResult.reason}`;
+                break;
+            case 'ERROR':
+                indicator.style.backgroundColor = STATUS_COLORS.ERROR;
+                indicator.title = `Error: ${validationResult.reason}`;
+                break;
+            default:
+                indicator.style.backgroundColor = STATUS_COLORS.OFFLINE;
+                indicator.title = 'Sensor offline or no data';
+        }
+        
+        // Store last status for trend detection
+        lastSensorStatus[sensorId] = validationResult;
+    }
+
+    function checkForSpikes(values, threshold = 3) {
+        // Check if there are sudden spikes in data (3x standard deviation)
+        if (!values || values.length < 10) return false;
+        
+        const validValues = values.filter(v => !isNaN(v));
+        if (validValues.length < 5) return false;
+        
+        const mean = validValues.reduce((a, b) => a + b, 0) / validValues.length;
+        const variance = validValues.reduce((a, b) => a + Math.pow(b - mean, 2), 0) / validValues.length;
+        const stdDev = Math.sqrt(variance);
+        
+        // Check last value for spike
+        const lastValue = values[values.length - 1];
+        return Math.abs(lastValue - mean) > (threshold * stdDev);
+    }
+
+    // ============================================
+    // Data Fetching Functions
+    // ============================================
+    async function fetchStations() {
+        try {
+            const response = await fetch(`${API_BASE_URL}/get_stations`);
+            if (!response.ok) throw new Error('Server error');
+            
+            const data = await response.json();
+            const select = document.getElementById('station-select');
+            
+            select.innerHTML = '';
+            data.stations.sort().forEach(station => {
+                const option = document.createElement('option');
+                option.value = station;
+                option.textContent = `Station ${station}`;
+                select.appendChild(option);
+            });
+            
+            if (data.stations.length > 0) {
+                currentStation = data.stations[0];
+                select.value = currentStation;
+                await fetchData();
+            }
+            
+            updateConnectionStatus(true);
+        } catch (error) {
+            console.error('Failed to fetch stations:', error);
+            updateConnectionStatus(false);
+            // Add default stations
+            const select = document.getElementById('station-select');
+            select.innerHTML = '';
+            [1, 2].forEach(station => {
+                const option = document.createElement('option');
+                option.value = station;
+                option.textContent = `Station ${station}`;
+                select.appendChild(option);
+            });
+            currentStation = 1;
+            select.value = currentStation;
+            fetchData();
+        }
+    }
+
+    async function fetchData() {
+        if (!currentStation) return;
+        
+        try {
+            const response = await fetch(
+                `${API_BASE_URL}/chart_data?senderId=${currentStation}&hours=${currentTimeRange}`
+            );
+            
+            if (!response.ok) throw new Error('Failed to fetch data');
+            
+            const data = await response.json();
+            updateConnectionStatus(true);
+            updateLastUpdate();
+            
+            // Update status card
+            updateStatusCard(data.status_info);
+            
+            // Update sensor cards with validation
+            updateSensorCards(data);
+            
+            // Update charts
+            updateCharts(data);
+            
+            // Update statistics
+            updateStatistics(data);
+            
+        } catch (error) {
+            console.error('Error fetching data:', error);
+            updateConnectionStatus(false);
+            // Show error status and set all sensors to error
+            updateStatusCard({
+                status: "ERROR",
+                details: "Failed to fetch data from server"
+            });
+            
+            // Set all sensor indicators to error/offline
+            ['temp', 'humidity', 'light', 'voltage', 'current', 'thermistor'].forEach(sensor => {
+                const indicator = document.getElementById(`${sensor}-status`);
+                if (indicator) {
+                    indicator.style.backgroundColor = STATUS_COLORS.ERROR;
+                    indicator.title = 'Failed to fetch sensor data';
+                }
+            });
+        }
+    }
+
+    function updateStatusCard(statusInfo) {
+        if (!statusInfo) return;
+        
+        const statusEl = document.getElementById('system-status');
+        const detailsEl = document.getElementById('status-details');
+        const badgeEl = document.getElementById('status-badge');
+        
+        statusEl.textContent = statusInfo.status;
+        detailsEl.textContent = statusInfo.details;
+        
+        // Update badge color based on status
+        if (statusInfo.status.includes('ERROR') || statusInfo.status.includes('WARNING')) {
+            badgeEl.className = 'badge badge-warning';
+            badgeEl.textContent = 'Warning';
+        } else if (statusInfo.status.includes('OPERATIONAL')) {
+            badgeEl.className = 'badge badge-success';
+            badgeEl.textContent = 'Operational';
+        } else if (statusInfo.status.includes('NO DATA')) {
+            badgeEl.className = 'badge badge-primary';
+            badgeEl.textContent = 'No Data';
+        } else if (statusInfo.status.includes('OFFLINE')) {
+            badgeEl.className = 'badge badge-error';
+            badgeEl.textContent = 'Offline';
+        } else {
+            badgeEl.className = 'badge badge-primary';
+            badgeEl.textContent = 'Active';
+        }
+    }
+
+    function updateSensorCards(data) {
+        if (!data || !data.labels || data.labels.length === 0) {
+            // Show placeholder values and set all indicators to offline
+            document.querySelectorAll('.value-display span:first-child').forEach(el => {
+                el.textContent = '--';
+            });
+            
+            // Set all sensor indicators to offline
+            ['temp', 'humidity', 'light', 'voltage', 'current', 'thermistor'].forEach(sensor => {
+                updateSensorStatusIndicator(sensor, { 
+                    status: 'ERROR', 
+                    reason: 'No data available' 
+                });
+            });
+            
+            return;
+        }
+        
+        const lastIndex = data.labels.length - 1;
+        
+        // Extract latest values
+        const latestValues = {
+            temp: data.temps[lastIndex],
+            humidity: data.humidity[lastIndex],
+            light: data.ldr[lastIndex],
+            voltage: data.voltage[lastIndex],
+            current: data.current[lastIndex],
+            thermistor: data.thermistor[lastIndex]
+        };
+        
+        // Validate each sensor
+        const validations = {
+            temp: validateSensorValue('TEMP', latestValues.temp),
+            humidity: validateSensorValue('HUMIDITY', latestValues.humidity),
+            light: validateSensorValue('LDR', latestValues.light),
+            voltage: validateSensorValue('VOLTAGE', latestValues.voltage),
+            current: validateSensorValue('CURRENT', latestValues.current),
+            thermistor: validateSensorValue('THERMISTOR', latestValues.thermistor)
+        };
+        
+        // Check for spikes in data
+        if (checkForSpikes(data.temps)) {
+            validations.temp = { 
+                status: 'WARNING', 
+                reason: 'Temperature spike detected' 
+            };
+        }
+        
+        if (checkForSpikes(data.voltage)) {
+            validations.voltage = { 
+                status: 'WARNING', 
+                reason: 'Voltage spike detected' 
+            };
+        }
+        
+        if (checkForSpikes(data.current)) {
+            validations.current = { 
+                status: 'WARNING', 
+                reason: 'Current spike detected' 
+            };
+        }
+        
+        // Update display values (color code based on validation)
+        updateValueDisplay('temp-value-main', latestValues.temp, validations.temp);
+        updateValueDisplay('temp-value', latestValues.temp, validations.temp);
+        updateValueDisplay('humidity-value', latestValues.humidity, validations.humidity);
+        updateValueDisplay('light-value', latestValues.light, validations.light);
+        updateValueDisplay('voltage-value', latestValues.voltage, validations.voltage);
+        updateValueDisplay('voltage-quick', latestValues.voltage, validations.voltage);
+        updateValueDisplay('current-value', latestValues.current, validations.current);
+        updateValueDisplay('thermistor-value', latestValues.thermistor, validations.thermistor);
+        
+        // Update sensor status indicators
+        Object.keys(validations).forEach(sensor => {
+            updateSensorStatusIndicator(sensor, validations[sensor]);
+        });
+        
+        // Update data points count
+        document.getElementById('data-points').textContent = data.labels.length;
+        
+        // Update min/max values
+        updateMinMax('temp', data.temps, validations.temp);
+        updateMinMax('humidity', data.humidity, validations.humidity);
+        updateMinMax('light', data.ldr, validations.light);
+        updateMinMax('voltage', data.voltage, validations.voltage);
+        updateMinMax('current', data.current, validations.current);
+        updateMinMax('thermistor', data.thermistor, validations.thermistor);
+    }
+
+    function updateValueDisplay(elementId, value, validation) {
+        const element = document.getElementById(elementId);
+        if (!element) return;
+        
+        if (value === undefined || value === null || isNaN(value)) {
+            element.textContent = '--';
+            element.style.color = STATUS_COLORS.ERROR;
+        } else {
+            // Format based on sensor type
+            const isTemp = elementId.includes('temp') || elementId.includes('thermistor');
+            const isVoltage = elementId.includes('voltage');
+            const isCurrent = elementId.includes('current');
+            
+            let formattedValue;
+            if (isTemp) {
+                formattedValue = value.toFixed(1);
+            } else if (isVoltage || isCurrent) {
+                formattedValue = value.toFixed(2);
+            } else if (elementId.includes('light')) {
+                formattedValue = Math.round(value);
+            } else {
+                formattedValue = value.toFixed(1);
+            }
+            
+            element.textContent = formattedValue;
+            
+            // Color code based on validation
+            switch(validation.status) {
+                case 'GOOD':
+                    element.style.color = STATUS_COLORS.GOOD;
+                    break;
+                case 'WARNING':
+                    element.style.color = STATUS_COLORS.WARNING;
+                    break;
+                case 'ERROR':
+                    element.style.color = STATUS_COLORS.ERROR;
+                    break;
+                default:
+                    element.style.color = '#94a3b8'; // Gray
+            }
+        }
+    }
+
+    function updateMinMax(prefix, values, validation) {
+    if (!values || values.length === 0) {
+        const minEl = document.getElementById(`${prefix}-min`);
+        const maxEl = document.getElementById(`${prefix}-max`);
+        if (minEl) minEl.textContent = `Min: --`;
+        if (maxEl) maxEl.textContent = `Max: --`;
+        return;
+    }
+    
+    // Use ALL values including invalid ones - just filter out null/undefined/NaN
+    const numericValues = values.filter(v => 
+        v !== null && v !== undefined && !isNaN(v)
+    );
+    
+    if (numericValues.length === 0) {
+        const minEl = document.getElementById(`${prefix}-min`);
+        const maxEl = document.getElementById(`${prefix}-max`);
+        if (minEl) minEl.textContent = `Min: --`;
+        if (maxEl) maxEl.textContent = `Max: --`;
+        return;
+    }
+    
+    const min = Math.min(...numericValues);
+    const max = Math.max(...numericValues);
+    
+    const minEl = document.getElementById(`${prefix}-min`);
+    const maxEl = document.getElementById(`${prefix}-max`);
+    
+    if (minEl) {
+        // Format based on sensor type
+        let formattedMin;
+        if (prefix.includes('temp') || prefix.includes('thermistor')) {
+            formattedMin = min.toFixed(1);
+        } else if (prefix.includes('voltage') || prefix.includes('current')) {
+            formattedMin = min.toFixed(2);
+        } else if (prefix.includes('light')) {
+            formattedMin = Math.round(min);
+        } else {
+            formattedMin = min.toFixed(1);
+        }
+        minEl.textContent = `Min: ${formattedMin}`;
+    }
+    
+    if (maxEl) {
+        // Format based on sensor type
+        let formattedMax;
+        if (prefix.includes('temp') || prefix.includes('thermistor')) {
+            formattedMax = max.toFixed(1);
+        } else if (prefix.includes('voltage') || prefix.includes('current')) {
+            formattedMax = max.toFixed(2);
+        } else if (prefix.includes('light')) {
+            formattedMax = Math.round(max);
+        } else {
+            formattedMax = max.toFixed(1);
+        }
+        maxEl.textContent = `Max: ${formattedMax}`;
+    }
+}
+
+    function updateCharts(data) {
+        if (!data || !data.labels || data.labels.length === 0) {
+            // Clear all charts
+            Object.values(charts).forEach(chart => {
+                chart.data.datasets[0].data = [];
+                chart.update('none');
+            });
+            return;
+        }
+        
+        // Update chart time units for better granularity on short ranges
+        const timeUnit = currentTimeRange < 0.1 ? 'second' : 'minute';
+        const now = new Date();
+        const minTime = new Date(Date.now() - currentTimeRange * 3600000);
+        Object.values(charts).forEach(chart => {
+            chart.options.scales.x.time.unit = timeUnit;
+            chart.options.scales.x.time.displayFormats = timeUnit === 'second' ? 
+                { second: 'HH:mm:ss' } : { minute: 'HH:mm' };
+            chart.options.scales.x.min = minTime;
+            chart.options.scales.x.max = now;
+        });
+        
+        // Prepare time-series data for all sensors
+        const tempData = data.labels.map((label, i) => ({ x: label, y: data.temps[i] || 0 }));
+        const humidityData = data.labels.map((label, i) => ({ x: label, y: data.humidity[i] || 0 }));
+        const lightData = data.labels.map((label, i) => ({ x: label, y: data.ldr[i] || 0 }));
+        const voltageData = data.labels.map((label, i) => ({ x: label, y: data.voltage[i] || 0 }));
+        const currentData = data.labels.map((label, i) => ({ x: label, y: data.current[i] || 0 }));
+        const thermistorData = data.labels.map((label, i) => ({ x: label, y: data.thermistor[i] || 0 }));
+        
+        // Update chart datasets
+        charts.tempChart.data.datasets[0].data = tempData;
+        charts.humidityChart.data.datasets[0].data = humidityData;
+        charts.lightChart.data.datasets[0].data = lightData;
+        charts.voltageChart.data.datasets[0].data = voltageData;
+        charts.currentChart.data.datasets[0].data = currentData;
+        charts.thermistorChart.data.datasets[0].data = thermistorData;
+        
+        // Update all charts
+        Object.values(charts).forEach(chart => chart.update());
+        
+        // Update time range labels
+        let rangeText;
+        if (currentTimeRange < 1) {
+            const minutes = Math.round(currentTimeRange * 60);
+            rangeText = `Last ${minutes} minute${minutes > 1 ? 's' : ''}`;
+        } else {
+            const hours = Math.round(currentTimeRange);
+            rangeText = `Last ${hours} hour${hours > 1 ? 's' : ''}`;
+        }
+        
+        document.querySelectorAll('[id$="range"]').forEach(el => {
+            el.textContent = rangeText;
+        });
+    }
+
+    function updateStatistics(data) {
+        if (!data || !data.labels || data.labels.length === 0) {
+            document.getElementById('stat-total').textContent = '0';
+            document.getElementById('stat-avg-temp').textContent = '--°C';
+            document.getElementById('stat-avg-voltage').textContent = '--V';
+            document.getElementById('stat-rate').textContent = '--/h';
+            return;
+        }
+        
+        const total = data.labels.length;
+        document.getElementById('stat-total').textContent = total;
+        
+        // Calculate averages using only valid data
+        const validTemps = data.temps.filter(t => 
+            t !== null && !isNaN(t) && 
+            t >= SENSOR_THRESHOLDS.TEMP.min && 
+            t <= SENSOR_THRESHOLDS.TEMP.max
+        );
+        
+        const validVoltages = data.voltage.filter(v => 
+            v !== null && !isNaN(v) && 
+            v >= SENSOR_THRESHOLDS.VOLTAGE.min && 
+            v <= SENSOR_THRESHOLDS.VOLTAGE.max
+        );
+        
+        const avgTemp = validTemps.length > 0 ? 
+            validTemps.reduce((a, b) => a + b, 0) / validTemps.length : 0;
+        const avgVoltage = validVoltages.length > 0 ? 
+            validVoltages.reduce((a, b) => a + b, 0) / validVoltages.length : 0;
+        
+        document.getElementById('stat-avg-temp').textContent = `${avgTemp.toFixed(1)}°C`;
+        document.getElementById('stat-avg-voltage').textContent = `${avgVoltage.toFixed(2)}V`;
+        
+        // Calculate data rate (points per hour)
+        const hours = currentTimeRange;
+        const rate = total / hours;
+        document.getElementById('stat-rate').textContent = `${rate.toFixed(1)}/h`;
+    }
+
+    // ============================================
+    // Event Handlers
+    // ============================================
+    function togglePause() {
+        isPaused = !isPaused;
+        const icon = document.getElementById('pause-icon');
+        const text = document.getElementById('pause-text');
+        
+        if (isPaused) {
+            clearInterval(refreshTimer);
+            icon.textContent = '▶️';
+            text.textContent = 'Resume';
+        } else {
+            icon.textContent = '⏸️';
+            text.textContent = 'Pause';
+            startAutoRefresh();
+            fetchData();
+        }
+    }
+
+    async function exportData() {
+        if (!currentStation) {
+            alert('Please select a station first');
+            return;
+        }
+        
+        try {
+            const response = await fetch(
+                `${API_BASE_URL}/export_data?senderId=${currentStation}&hours=${currentTimeRange}`
+            );
+            
+            if (!response.ok) throw new Error('Export failed');
+            
+            const blob = await response.blob();
+            const url = window.URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `station_${currentStation}_data.csv`;
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            window.URL.revokeObjectURL(url);
+            
+        } catch (error) {
+            console.error('Export error:', error);
+            alert('Failed to export data');
+        }
+    }
+
+    function toggleCharts() {
+        const grid = document.getElementById('charts-grid');
+        grid.classList.toggle('hidden');
+        
+        const btn = document.getElementById('chart-toggle');
+        btn.innerHTML = grid.classList.contains('hidden') ? 
+            '<span>📈</span> Show Charts' : 
+            '<span>📈</span> Hide Charts';
+    }
+
+    async function sendCommand() {
+        if (!currentStation) {
+            alert('Please select a station first.');
+            return;
+        }
+
+        if (!confirm(`Are you sure you want to send a TOGGLE_RELAY command to Station ${currentStation}?`)) {
+            return;
+        }
+
+        try {
+            const response = await fetch(`${API_BASE_URL}/command`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                    station_id: currentStation,
+                    command: 'TOGGLE_RELAY'
+                }),
+            });
+
+            if (response.ok) {
+                alert(`Command sent to Station ${currentStation}.`);
+            } else {
+                const errorData = await response.json();
+                alert(`Failed to send command: ${errorData.message || 'Unknown error'}`);
+            }
+        } catch (error) {
+            console.error('Command error:', error);
+            alert('An error occurred while sending the command.');
+        }
+    }
+
+    // ============================================
+    // Initialize Application
+    // ============================================
+    function startAutoRefresh() {
+        if (refreshTimer) clearInterval(refreshTimer);
+        refreshTimer = setInterval(() => {
+            if (!isPaused) {
+                fetchData();
+            }
+        }, REFRESH_INTERVAL);
+    }
+
+    function initialize() {
+        // Set up event listeners
+        document.getElementById('station-select').addEventListener('change', (e) => {
+            currentStation = e.target.value;
+            fetchData();
+        });
+        
+        document.getElementById('time-range-select').addEventListener('change', (e) => {
+            currentTimeRange = parseFloat(e.target.value);
+            fetchData();
+        });
+        
+        document.getElementById('refresh-btn').addEventListener('click', fetchData);
+        document.getElementById('pause-btn').addEventListener('click', togglePause);
+        document.getElementById('export-btn').addEventListener('click', exportData);
+        document.getElementById('chart-toggle').addEventListener('click', toggleCharts);
+        document.getElementById('command-btn').addEventListener('click', sendCommand);
+        
+        // Keyboard shortcuts
+        document.addEventListener('keydown', (e) => {
+            if (e.key === 'r' || e.key === 'R') {
+                e.preventDefault();
+                fetchData();
+            }
+            if (e.key === 'p' || e.key === 'P') {
+                e.preventDefault();
+                togglePause();
+            }
+            if (e.key === '1' || e.key === '2') {
+                e.preventDefault();
+                const station = e.key === '1' ? '1' : '2';
+                document.getElementById('station-select').value = station;
+                currentStation = station;
+                fetchData();
+            }
+        });
+        
+        // Start data freshness updates
+        setInterval(updateDataFreshness, 1000);
+        
+        // Start uptime counter
+        uptimeInterval = setInterval(updateUptime, 1000);
+        
+        // Initialize
+        // Read currently selected time range so initial fetch respects user selection
+        try {
+            const sel = document.getElementById('time-range-select');
+            if (sel && sel.value) currentTimeRange = parseFloat(sel.value);
+        } catch (e) {
+            console.warn('Failed to read time-range-select, using default', e);
+        }
+
+        fetchStations();
+        startAutoRefresh();
+        
+        // Initial updates
+        updateDataFreshness();
+        updateUptime();
+    }
+
+    // Start the application when DOM is loaded
+    document.addEventListener('DOMContentLoaded', initialize);
+
+    // Cleanup on page unload
+    window.addEventListener('beforeunload', () => {
+        if (refreshTimer) clearInterval(refreshTimer);
+        if (uptimeInterval) clearInterval(uptimeInterval);
+    });
+</script>
+
+<!-- Modal for detailed chart view -->
+<div id="chart-modal" class="modal">
+    <div class="modal-content">
+        <span class="close">&times;</span>
+        <h2 id="modal-title">Detailed Chart View</h2>
+        <canvas id="modal-chart" width="800" height="400"></canvas>
+    </div>
+</div>
+
+<style>
+.modal {
+    display: none;
+    position: fixed;
+    z-index: 1000;
+    left: 0;
+    top: 0;
+    width: 100%;
+    height: 100%;
+    background-color: rgba(0,0,0,0.5);
+}
+
+.modal-content {
+    background-color: #fff;
+    margin: 5% auto;
+    padding: 20px;
+    border: 1px solid #888;
+    width: 90%;
+    max-width: 1000px;
+    border-radius: 8px;
+}
+
+.close {
+    color: #aaa;
+    float: right;
+    font-size: 28px;
+    font-weight: bold;
+    cursor: pointer;
+}
+
+.close:hover {
+    color: black;
+}
+
+#modal-chart {
+    width: 100% !important;
+    height: 400px !important;
+    max-width: 100%;
+}
+</style>
+
+<script>
+// Modal functionality
+const modal = document.getElementById('chart-modal');
+const modalChart = document.getElementById('modal-chart');
+const modalTitle = document.getElementById('modal-title');
+const closeBtn = document.querySelector('.close');
+
+closeBtn.onclick = () => modal.style.display = 'none';
+window.onclick = (event) => { if (event.target == modal) modal.style.display = 'none'; };
+
+let currentModalChart = null;
+
+// Make chart containers clickable
+document.querySelectorAll('.chart-container').forEach(container => {
+    container.style.cursor = 'pointer';
+    container.addEventListener('click', () => {
+        const canvas = container.querySelector('canvas');
+        if (canvas && charts[canvas.id]) {
+            const chart = charts[canvas.id];
+            modalTitle.textContent = chart.data.datasets[0].label || 'Detailed Chart View';
+            modal.style.display = 'block';
+            
+            // Destroy previous modal chart
+            if (currentModalChart) currentModalChart.destroy();
+            
+            // Delay chart creation to ensure modal is rendered
+            setTimeout(() => {
+                // Create new config for modal (deep clone data and options)
+                const config = {
+                    type: 'line', // Use line chart for trend view
+                    data: {
+                        datasets: chart.data.datasets.map(ds => ({
+                            ...ds,
+                            data: ds.data.map((d, i) => ({ x: i, y: d.y })) // Map to index for simple plotting
+                        }))
+                    },
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        plugins: {
+                            legend: { display: true },
+                            tooltip: {
+                                mode: 'index',
+                                intersect: false,
+                                callbacks: {
+                                    label: function(context) {
+                                        return `${context.dataset.label}: ${context.parsed.y.toFixed(2)}`;
+                                    }
+                                }
+                            }
+                        },
+                        scales: {
+                            x: {
+                                type: 'linear',
+                                title: {
+                                    display: true,
+                                    text: 'Data Points'
+                                },
+                                ticks: {
+                                    color: '#94a3b8'
+                                }
+                            },
+                            y: {
+                                beginAtZero: true,
+                                title: {
+                                    display: true,
+                                    text: chart.data.datasets[0].label.split(':')[0] // e.g., 'Temperature'
+                                },
+                                ticks: {
+                                    color: '#94a3b8'
+                                }
+                            }
+                        },
+                        interaction: {
+                            intersect: false,
+                            mode: 'index'
+                        },
+                        elements: {
+                            line: {
+                                tension: 0.4
+                            },
+                            point: {
+                                radius: 3
+                            }
+                        }
+                    }
+                };
+                
+                currentModalChart = new Chart(modalChart, config);
+            }, 500);
+        }
+    });
+});
+</script>
+
+</body>
+</html>

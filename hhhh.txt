@@ -1,0 +1,30 @@
+#include "ACS712.h"
+
+// Parameters: (AnalogPin, Volts, ADC_Resolution, mV_per_Amp)
+// Sensitivity for 5A model is 185 mV/A. 
+// With a 10k/20k divider, the ESP32 sees 123.33 mV/A (185 * 20/30).
+ACS712 sensor(34, 3.3, 4095, 123.33);
+
+void setup() {
+  Serial.begin(115200);
+
+  // Calibration: MUST have NO LOAD connected during this step
+  Serial.println("Calibrating midpoint (ensure load is OFF)...");
+  sensor.autoMidPoint(); 
+  Serial.print("Midpoint: ");
+  Serial.println(sensor.getMidPoint());
+}
+
+void loop() {
+  // Use high oversampling (1000+) to filter ESP32 ADC noise
+  float mA = sensor.mA_DC(1000); 
+
+  // Basic noise gate: If reading is less than 20mA, show 0
+  if (abs(mA) < 20) mA = 0;
+
+  Serial.print("Current: ");
+  Serial.print(mA / 1000.0, 3); // Display in Amps
+  Serial.println(" A");
+  
+  delay(500);
+}

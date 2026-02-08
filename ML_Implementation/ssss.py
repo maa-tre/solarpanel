@@ -1,4 +1,4 @@
-
+# FILE: d:\DEEPSEEEK\ML_Implementation\server_ml.py
 # ML-Enhanced Server - Isolated Version
 from flask import Flask, request, jsonify, render_template_string, Response
 from flask_cors import CORS
@@ -221,26 +221,24 @@ def log_data():
         ensure_csv_file(file_name)
         if check_file_size(file_name): rotate_csv_file(file_name)
         
-        # Extract Data
+        # --- Extract Data ---
         ldr_value = float(record.get("ldrValue") or 0)
         dht_temp = float(record.get("dhtTemp") or 0)
         humidity = float(record.get("humidity") or 0)
         voltage = float(record.get("voltage") or 0)
-        # In log_data() function:
+        
+        # --- CURRENT FIX: Sender now sends Amps directly (e.g., 0.45) ---
+        # NO DIVISION BY 1000 NEEDED!
         current_raw = record.get("current")
-        # Sender already sends 0 for ≤200mA, so just convert properly
         try:
-            current_val = float(current_raw or 0)
-            if current_val == 0:
-                current = 0.0  # Keep as 0
-            else:
-                current = current_val / 1000  # Convert mA to A
+            # Sender sends Amps directly (e.g., 0.45), NOT mA (450)
+            current = float(current_raw or 0)
+            logger.info(f"Station {sender_id}: Current received={current} A")
         except:
             current = 0.0
-        # current = float(current_raw or 0) / 1000  # Convert mA to A
+            logger.warning(f"Station {sender_id}: Failed to parse current: {current_raw}")
+            
         thermistor_temp = float(record.get("thermistorTemp") or 0)
-        
-        logger.info(f"Station {sender_id}: Raw current={current_raw}, Converted current={current}")
         
         # ML Prediction
         ml_prediction = "Normal"
@@ -262,7 +260,7 @@ def log_data():
             humidity,
             thermistor_temp,
             voltage,
-            current,
+            current,  # Already in Amps
             True, # valid
             int(datetime.now().timestamp() * 1000),
             ml_prediction
@@ -276,7 +274,8 @@ def log_data():
         last_data_received[sender_id] = datetime.now()
         
         # Clear cache
-        if f"chart_{sender_id}" in DATA_CACHE: del DATA_CACHE[f"chart_{sender_id}"]
+        if f"chart_{sender_id}" in DATA_CACHE: 
+            del DATA_CACHE[f"chart_{sender_id}"]
 
     return jsonify({"status": "success", "logged": logged})
 
@@ -303,8 +302,7 @@ def chart_data():
         # Map negative voltage to zero for dashboard display
         df['voltage'] = df['voltage'].clip(lower=0)
         
-        # Current is already in amps from storage, no further conversion needed
-        
+        # Current is already stored in amps, no conversion needed
         status = calculate_system_status(df)
         
         return jsonify({
@@ -314,13 +312,35 @@ def chart_data():
             "ldr": df['ldrValue'].tolist() if 'ldrValue' in df.columns else [],
             "thermistor": df['thermistorTemp'].tolist() if 'thermistorTemp' in df.columns else [],
             "voltage": df['voltage'].tolist() if 'voltage' in df.columns else [],
-            "current": df['current'].tolist() if 'current' in df.columns else [],
+            "current": df['current'].tolist() if 'current' in df.columns else [],  # Already in Amps
             "ml_predictions": df.get('ml_prediction', []).fillna("Normal").tolist(),
             "status_info": status,
             "statistics": calculate_statistics(df)
         })
     except Exception as e:
         return jsonify({"error": str(e)})
+
+@app.route('/debug_current/<int:sender_id>')
+def debug_current(sender_id):
+    """Debug endpoint to check current values in database"""
+    file_name = get_data_file(sender_id)
+    if not os.path.exists(file_name):
+        return jsonify({"error": "No data file"})
+    
+    df = pd.read_csv(file_name)
+    
+    # Get last 10 records
+    last_10 = df.tail(10)[['timestamp', 'current']].to_dict('records')
+    
+    return jsonify({
+        "file": file_name,
+        "total_records": len(df),
+        "current_min": float(df['current'].min()) if 'current' in df.columns else 0,
+        "current_max": float(df['current'].max()) if 'current' in df.columns else 0,
+        "current_avg": float(df['current'].mean()) if 'current' in df.columns else 0,
+        "last_10_records": last_10,
+        "note": "Current should be in Amps (e.g., 0.45 not 450)"
+    })
 
 @app.route('/get_stations')
 def get_stations():

@@ -15,16 +15,13 @@
 // --- Wi-Fi Credentials ---
 const char* ssid     = "Acerhotspot"; // <<< Your hotspot SSID
 const char* password = "123456780"; // <<< Your hotspot password
-//const char* ssid     = "OnePlus";
-//const char* password = "aaaaaaaa"; // <<< Your hotspot password
+
 // --- Fixed Wi-Fi Channel ---
-//const uint8_t FIXED_CHANNEL = 11; // Both ESP-NOW and Wi-Fi must match
-const uint8_t FIXED_CHANNEL = 11;
+const uint8_t FIXED_CHANNEL = 11; // ignored and must match to sender esp channel or force set wifi to match channel
 
 // --- Flask Server URL ---
-
 const char* flaskServerUrl = "http://192.168.1.69:5000/log_data"; //computer ip
-const char* commandServerBaseUrl = "http://192.168.1.69:5000/get-command/"; // Base URL for commands */
+const char* commandServerBaseUrl = "http://192.168.1.69:5000/get-command/"; // Base URL for commands
 
 // --- MAC Addresses of Sender Devices ---
 // IMPORTANT: Replace with the actual MAC addresses of your sender devices
@@ -39,7 +36,7 @@ typedef struct struct_message {
     float humidity;
     float thermistorTemp;
     float voltage;
-    float current;
+    float current; // Now in Amps (not mA)
     bool  valid;
 } struct_message;
 
@@ -75,7 +72,7 @@ void OnDataRecv(const esp_now_recv_info* recv_info, const uint8_t* incomingDataP
     Serial.printf(
         "Data received from Sender ID: %d | MAC: %02X:%02X:%02X:%02X:%02X:%02X\n"
         "  -> LDR: %d, DHT Temp: %.2f C, Humidity: %.2f %%\n"
-        "  -> Thermistor Temp: %.2f C, Voltage: %.2f V, Current: %.2f mA, Valid: %s\n",
+        "  -> Thermistor Temp: %.2f C, Voltage: %.2f V, Current: %.3f A, Valid: %s\n", // UPDATED: Current now in Amps
         tempIncomingData.senderId,
         recv_info->src_addr[0], recv_info->src_addr[1], recv_info->src_addr[2],
         recv_info->src_addr[3], recv_info->src_addr[4], recv_info->src_addr[5],
@@ -84,7 +81,7 @@ void OnDataRecv(const esp_now_recv_info* recv_info, const uint8_t* incomingDataP
         tempIncomingData.humidity,
         tempIncomingData.thermistorTemp,
         tempIncomingData.voltage,
-        tempIncomingData.current,
+        tempIncomingData.current, // Now in Amps (e.g., 0.45 instead of 450)
         tempIncomingData.valid ? "True" : "False"
     );
 }
@@ -127,7 +124,7 @@ void sendAggregatedDataToFlask() {
                 record["humidity"]           = senderData.data.humidity;
                 record["thermistorTemp"]     = senderData.data.thermistorTemp;
                 record["voltage"]            = senderData.data.voltage;
-                record["current"]            = senderData.data.current;
+                record["current"]            = senderData.data.current; // Now in Amps
                 record["valid"]              = senderData.data.valid;
                 record["gateway_timestamp_ms"] = millis();
             } else {

@@ -20,15 +20,16 @@
 const int SENDER_ID = 2; // <<< IMPORTANT: CHANGE THIS TO '2' FOR THE SECOND SENDER
 
 // --- Wi-Fi & ESP-NOW Configuration ---
-uint8_t centralNodeAddress[] = {0x10, 0x52, 0x1C, 0xA7, 0x54, 0x08}; // <<< UPDATE THIS WITH YOUR RECEIVER'S ACTUAL MAC
+uint8_t centralNodeAddress[] = {0x88, 0x57, 0x21, 0x8E, 0xC2, 0xBC}; // Central Node MAC
+//uint8_t centralNodeAddress[] = {0x10, 0x52, 0x1C, 0xA7, 0x54, 0x08}; // <<< UPDATE THIS WITH YOUR RECEIVER'S ACTUAL MAC
 //const uint8_t COMMON_WIFI_CHANNEL = 11; // Must match Central Node/router 2.4GHz channel
 const uint8_t COMMON_WIFI_CHANNEL = 1;
 // --- Sensor Pin Definitions ---
 #define DHTPIN               4
 #define DHTTYPE              DHT22
-#define LDR_PIN              36
+#define LDR_PIN              35 //36
 #define THERMISTOR_PIN       34
-#define VOLTAGE_SENSOR_PIN   39
+#define VOLTAGE_SENSOR_PIN   33
 #define CURRENT_SENSOR_PIN   32
 #define RELAY_PIN            2  // Example pin for the relay
 

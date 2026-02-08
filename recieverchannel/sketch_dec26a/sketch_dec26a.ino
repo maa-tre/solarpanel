@@ -13,23 +13,25 @@
 #include "esp_wifi.h" // For setting Wi-Fi channel explicitly
 
 // --- Wi-Fi Credentials ---
-//const char* ssid     = "Maa Kali Boys Hostel"; // <<< Your hotspot SSID
-//const char* password = "12345809"; // <<< Your hotspot password
-const char* ssid     = "OnePlus";
-const char* password = "aaaaaaaa"; // <<< Your hotspot password
+const char* ssid     = "Acerhotspot"; // <<< Your hotspot SSID
+const char* password = "123456780"; // <<< Your hotspot password
+//const char* ssid     = "OnePlus";
+//const char* password = "aaaaaaaa"; // <<< Your hotspot password
 
 // --- Fixed Wi-Fi Channel ---
 const uint8_t FIXED_CHANNEL = 11; // Both ESP-NOW and Wi-Fi must match
+const char* flaskServerUrl = "http://192.168.1.69:5000/log_data"; //computer ip
+const char* commandServerBaseUrl = "http://192.168.1.69:5000/get-command/"; // Base URL for commands */
 
 // --- Ngrok Server URL (HTTPS) ---
 // Replace with your actual ngrok URL
-const char* flaskServerUrl = "https://24d8d774b99d.ngrok-free.app/log_data";
-const char* commandServerBaseUrl = "https://24d8d774b99d.ngrok-free.app/get-command/";
+//const char* flaskServerUrl = "https://24d8d774b99d.ngrok-free.app/log_data";
+//const char* commandServerBaseUrl = "https://24d8d774b99d.ngrok-free.app/get-command/";
 
 // --- MAC Addresses of Sender Devices ---
 // IMPORTANT: Replace with the actual MAC addresses of your sender devices
 uint8_t sender1_mac[] = {0x5C, 0x01, 0x3B, 0x4C, 0xD3, 0x18}; // <<< UPDATE THIS WITH SENDER 1 MAC
-uint8_t sender2_mac[] = {0xCC, 0xDB, 0xA7, 0x48, 0x6E, 0x7C}; // <<< UPDATE THIS WITH SENDER 2 MAC
+uint8_t sender2_mac[] = {0x10, 0x52, 0x1C, 0xA7, 0x54, 0x08}; // <<< UPDATE THIS WITH SENDER 2 MAC
 
 // --- Structure to hold sensor data ---
 typedef struct struct_message {
@@ -329,6 +331,7 @@ void setup() {
 
     // Test ngrok connection
     testNgrokConnection();
+
 
     if (esp_now_init() != ESP_OK) {
         Serial.println("Error initializing ESP-NOW");

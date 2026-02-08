@@ -12,7 +12,6 @@
 #include <esp_wifi.h> // Required for esp_wifi_set_channel()
 #include <DHT.h>      // For DHT22 Temperature/Humidity Sensor
 #include <math.h>     // For log() in Thermistor calculation
-#include <ACS712.h>   // For ACS712 Current Sensor
 
 // --- SENDER CONFIGURATION (CHANGE FOR EACH SENDER) ---
 // This is the unique identifier for this specific sender node.
@@ -20,10 +19,7 @@
 const int SENDER_ID = 1; // <<< IMPORTANT: CHANGE THIS TO '2' FOR THE SECOND SENDER
 
 // --- Wi-Fi & ESP-NOW Configuration ---
-//uint8_t centralNodeAddress[] = {0x10, 0x52, 0x1C, 0xA7, 0x54, 0x08}; // Central Node MAC
 uint8_t centralNodeAddress[] = {0x88, 0x57, 0x21, 0x8E, 0xC2, 0xBC}; // Central Node MAC
-
-//const uint8_t COMMON_WIFI_CHANNEL = 11; // Must match Central Node/router 2.4GHz channel
 const uint8_t COMMON_WIFI_CHANNEL = 1;
 
 // --- Sensor Pin Definitions ---
@@ -42,28 +38,24 @@ const float BETA_VALUE                         = 4000.0;
 const float FIXED_RESISTOR_VALUE               = 10000.0;
 const float TEMPERATURE_CALIBRATION_OFFSET_C = 2.0;
 
-// --- ACS712 Current Sensor Constants ---
-// 5A version: 185 mV/A, 20A version: 100 mV/A, 30A version: 66 mV/A
-const float currentSensorSensitivity = 100; // 20A module (100 mV/A)
-
-// --- ESP32 ADC Constants ---
-const float ESP32_ADC_MAX = 4095.0;
-const float ESP32_V_REF   = 3.3;
+// --- EMPIRICAL CALIBRATION CONSTANTS FOR CURRENT SENSOR ---
+// Based on your measurements: 1.49V = 0A | 1.569V = 0.45A
+const float V_PIN_ZERO       = 1.490;   
+const float REAL_SENSITIVITY = 0.1755;  // (1.569 - 1.490) / 0.45
+const float ESP_VREF         = 3.3;     
+const float ESP32_ADC_MAX    = 4095.0;  
 
 // --- Voltage Sensor Calibration ---
-const float SENSOR_VOLTAGE_DIVIDER_RATIO = 7.5757;
-const float VOLTAGE_CALIBRATION_OFFSET_V = 0.0; // changed from offsett volt -1.75;
+// Updated: Using direct milliVolt reading and 5x multiplier
+const float VOLTAGE_CALIBRATION_OFFSET_V = 0.0;
 
 // --- General Measurement Constants ---
 const int NUM_ADC_READINGS_AVG = 50;
 const int MEASUREMENT_INTERVAL_MS = 5000;
-const int CURRENT_SENSOR_SAMPLES = 1000; // High oversampling for ACS712 filtering
+const int CURRENT_SENSOR_SAMPLES = 500; // For the new current measurement logic
 
 // --- Sensor Objects ---
 DHT dht(DHTPIN, DHTTYPE);
-// Parameters: (AnalogPin, Volts, ADC_Resolution, mV_per_Amp)
-// Sensitivity for 20A model is 100 mV/A
-ACS712 ACS(CURRENT_SENSOR_PIN, ESP32_V_REF, (int)ESP32_ADC_MAX, currentSensorSensitivity);
 
 // --- Command Structure (for receiving commands from central node) ---
 typedef struct struct_command {
@@ -79,7 +71,7 @@ typedef struct struct_message {
     float humidity;
     float thermistorTemp;
     float voltage;
-    float current;
+    float current; // Now in Amps (not mA)
     bool  valid;
 } struct_message;
 
@@ -100,24 +92,6 @@ void OnDataSent(const esp_now_send_info_t* send_info, esp_now_send_status_t stat
         Serial.println("Packet delivery failed! Confirm channel and receiver status.");
     }
 }
-
-/*
-// inside ESP-NOW (YOU NEVER SEE THIS CODE):
-void internal_packet_handler() {
-    // 1. ESP-NOW creates the parameters
-    esp_now_recv_info info;
-    info.src_addr = packet.source_mac;
-    info.rssi = packet.signal_strength;
-    // ... fill all fields
-    
-    uint8_t *data = packet.payload;  // Raw bytes
-    int length = packet.payload_length;
-    
-    // 2. ESP-NOW calls YOUR function with THESE parameters
-    saved_callback(&info, data, length);
-    // This becomes: OnDataRecv(&info, data, length)
-}
-*/
 
 // --- ESP-NOW Receive Callback (for commands from central node) ---
 void OnDataRecv(const esp_now_recv_info *recv_info, const uint8_t *incomingData, int len) {
@@ -160,12 +134,10 @@ void setup() {
     dht.begin();
     Serial.println("DHT Sensor Initialized.");
 
-    // Calibrate ACS712 current sensor
-    Serial.println("Calibrating ACS712 midpoint (ensure NO LOAD is connected)...");
-    delay(1000);
-    ACS.autoMidPoint();
-    Serial.print("ACS712 Midpoint calibrated: ");
-    Serial.println(ACS.getMidPoint());
+    // Calibration note for current sensor
+    Serial.println("Current sensor using empirical calibration:");
+    Serial.printf("  Zero-point voltage: %.3f V\n", V_PIN_ZERO);
+    Serial.printf("  Sensitivity: %.4f V/A\n", REAL_SENSITIVITY);
 
     // Wi-Fi & ESP-NOW setup
     WiFi.mode(WIFI_STA);
@@ -247,39 +219,40 @@ void loop() {
         }
         Serial.printf("Thermistor Temp: %.2f C\n", myData.thermistorTemp);
 
-        // --- Voltage Sensor ---
-        long sumVoltageADC = 0;
-        for (int i = 0; i < NUM_ADC_READINGS_AVG; i++) {
-            sumVoltageADC += analogRead(VOLTAGE_SENSOR_PIN);
-            delayMicroseconds(100);
-        }
-        float avgVoltageADC = sumVoltageADC / (float)NUM_ADC_READINGS_AVG;
-        float espVoltage = avgVoltageADC / ESP32_ADC_MAX * ESP32_V_REF;
-        float voltageCalc = (espVoltage * SENSOR_VOLTAGE_DIVIDER_RATIO) + VOLTAGE_CALIBRATION_OFFSET_V;
-        if (!isnan(voltageCalc)) {
-            myData.voltage = voltageCalc;
+        // --- VOLTAGE SENSOR (NEW LOGIC) ---
+        // Using analogReadMilliVolts for better accuracy
+        float pinMV = analogReadMilliVolts(VOLTAGE_SENSOR_PIN);
+        myData.voltage = (pinMV / 1000.0) * 5.0; // Multiply by 5 (1:5 voltage divider)
+        
+        if (!isnan(myData.voltage)) {
+            // Apply calibration offset if needed
+            myData.voltage += VOLTAGE_CALIBRATION_OFFSET_V;
         } else {
             Serial.println("Voltage Sensor Error → Sending 0");
         }
-        Serial.printf("Voltage: %.2f V\n", myData.voltage);
+        Serial.printf("Voltage: %.2f V (Pin reading: %.1f mV)\n", myData.voltage, pinMV);
 
-        // --- ACS712 Current Sensor (UPDATED) ---
-        // Use high oversampling (1000+) to filter ESP32 ADC noise
-        float mA = ACS.mA_DC(CURRENT_SENSOR_SAMPLES);
+        // --- CURRENT SENSOR (NEW EMPIRICAL LOGIC) ---
+        // Take multiple samples for noise reduction
+        long adcRawSum = 0;
+        for(int i = 0; i < CURRENT_SENSOR_SAMPLES; i++) {
+            adcRawSum += analogRead(CURRENT_SENSOR_PIN);
+            delayMicroseconds(50);
+        }
+        float avgADC = (float)adcRawSum / CURRENT_SENSOR_SAMPLES;
         
-        /*
-        // Basic noise gate: If reading is less than 20mA, show 0
-        if (abs(mA) < 20) mA = 0;
+        // Calculate voltage seen at the ESP32 Pin
+        float voltageAtPin = (avgADC / ESP32_ADC_MAX) * ESP_VREF;
         
-        myData.current = mA; // Store in mA
-    */
-        // Already done - sends 0 when current ≤ 200mA
-if (mA <= 200) {
-    myData.current = 0;
-} else {
-    myData.current = mA;
-}
-        Serial.printf("Current: %.2f mA (%.3f A)\n", myData.current, myData.current / 1000.0);
+        // Calculate Current using Empirical Sensitivity
+        myData.current = (voltageAtPin - V_PIN_ZERO) / REAL_SENSITIVITY;
+
+        // Noise gate: ignore very small currents
+        if (abs(myData.current) < 0.03) myData.current = 0.00;
+        
+        Serial.printf("Current Sensor - Pin Voltage: %.3f V | Current: %.3f A\n", 
+                     voltageAtPin, myData.current);
+        Serial.printf("Current: %.2f A\n", myData.current);
 
         // Send via ESP-NOW
         esp_err_t result = esp_now_send(centralNodeAddress, (uint8_t*)&myData, sizeof(myData));
